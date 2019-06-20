@@ -1,0 +1,136 @@
+service: intro-to-serverless
+
+frameworkVersion: ">=1.45 <2.0.0"
+
+provider:
+  name: aws
+  runtime: python3.7
+  stage: ${opt:stage, 'dev'}
+  region: us-east-1
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - "dynamodb:PutItem"
+        - "dynamodb:GetItem"
+        - "dynamodb:Scan"
+      Resource:
+        - "arn:aws:dynamodb:*:*:table/${file(./env.yml):dynamoTable}"
+        - "arn:aws:dynamodb:*:*:table/${file(./env.yml):dynamoTable}/index/*"
+  environment:
+    DYNAMO_TABLE: ${file(./env.yml):dynamoTable}
+
+custom:
+  client:
+    bucketName: ${file(./env.yml):bucketName}
+    distributionFolder: frontend/docs
+    manageResources: false
+
+plugins:
+  - serverless-finch
+
+functions:
+  insert_task:
+    handler: backend/insert_handler.main
+    events:
+      - http:
+          path: insert_task
+          method: post
+          cors: true
+  get_tasks:
+    handler: backend/get_handler.main
+    events:
+      - http:
+          path: get_tasks
+          method: get
+          cors: true
+
+package:
+  exclude:
+    - .git/**
+    - frontend/**
+    - node_modules/**
+    
+# --------------------------------------
+# CloudFormation
+# --------------------------------------
+
+resources:
+  Resources:
+    WebsiteBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${file(./env.yml):bucketName}
+
+    OriginAccessIdentity:
+      Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+      Properties:
+        CloudFrontOriginAccessIdentityConfig:
+          Comment: !Join
+            - ' '
+            - - CloudFront OAI for
+              - !Ref AWS::StackName
+
+    WebsiteBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref WebsiteBucket
+        PolicyDocument:
+          Statement:
+            - Action: s3:GetObject
+              Effect: Allow
+              Resource: !Join
+                - ''
+                - - !GetAtt WebsiteBucket.Arn
+                  - /*
+              Principal:
+                CanonicalUser: !GetAtt OriginAccessIdentity.S3CanonicalUserId
+    
+    Distribution:
+      Type: AWS::CloudFront::Distribution
+      Properties:
+        DistributionConfig:
+          Enabled: true
+          DefaultRootObject: index.html
+          Origins:
+            - DomainName: !GetAtt WebsiteBucket.DomainName
+              Id: website-bucket
+              S3OriginConfig:
+                OriginAccessIdentity: !Join
+                  - /
+                  - - origin-access-identity
+                    - cloudfront
+                    - !Ref OriginAccessIdentity
+          DefaultCacheBehavior:
+            TargetOriginId: website-bucket
+            ViewerProtocolPolicy: redirect-to-https
+            Compress: true
+            ForwardedValues:
+              QueryString: false
+            MinTTL: 0
+            MaxTTL: 300
+            DefaultTTL: 60
+    
+    DynamoTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${file(./env.yml):dynamoTable}
+        ProvisionedThroughput: 
+          ReadCapacityUnits: "5"
+          WriteCapacityUnits: "5"
+        AttributeDefinitions:
+          - AttributeName: "id"
+            AttributeType: "S"
+          - AttributeName: "timestamp"
+            AttributeType: "S"
+        KeySchema:
+          - AttributeName: "id"
+            KeyType: "HASH"
+          - AttributeName: "timestamp"
+            KeyType: "RANGE"
+
+  Outputs:
+    WebsiteURL:
+      Value: !Join
+        - ''
+        - - https://
+          - !GetAtt Distribution.DomainName

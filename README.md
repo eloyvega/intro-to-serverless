@@ -20,7 +20,7 @@ Infraestructura:
 
 ![alt text](./images/serverless-intro.png "Diagrama de arquitectura")
 
-## Instalación
+## Instalación de Serverless
 
 Instalar Serverless con npm:
 
@@ -35,6 +35,7 @@ Antes de desplegar el backend es necesario configurarlo. Edita el archivo `env.y
 Ejecuta el siguiente comando para crear toda la infraestructura de la aplicación y despliega las funciones Lambda junto con API Gateway (puede tomar varios minutos la primera vez):
 
 ```
+npm install
 serverless deploy
 ```
 

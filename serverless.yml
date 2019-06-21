@@ -129,8 +129,12 @@ resources:
             KeyType: "RANGE"
 
   Outputs:
+    WebsiteBucket:
+      Value: !Ref WebsiteBucket
+      Description: Name of the website bucket
     WebsiteURL:
       Value: !Join
         - ''
         - - https://
           - !GetAtt Distribution.DomainName
+      Description: URL of the website

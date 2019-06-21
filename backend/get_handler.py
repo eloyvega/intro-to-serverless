@@ -12,7 +12,7 @@ def main(event, context):
     response = dynamo_table.scan()
     items += response['Items']
     while 'LastEvaluatedKey' in response:
-        response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+        response = dynamo_table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
         items += response['Items']
     sorted_response = sorted(items, key=lambda k: k['timestamp'], reverse=True)
     api_response = {
